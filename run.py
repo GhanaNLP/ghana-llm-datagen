@@ -1,7 +1,7 @@
 """
 Ghana LLM Dataset Generator — Volunteer Entry Point
 =====================================================
-One command. Runs your assigned news data slice, then research data slice, back to back.
+Runs your assigned news and research data through Llama 3.1 70b for LLM data generation.
 
 Usage:
     python run.py --code YOUR_VOLUNTEER_CODE
@@ -246,6 +246,7 @@ def news_prompt(chunk: dict, example: str) -> str:
 - Generate a realistic multi-turn conversation between a curious USER and a knowledgeable ASSISTANT.
 - The conversation must have 4-6 turns (USER and ASSISTANT alternating).
 - Ground all facts strictly in the article. Do not invent facts.
+- The article's publication date is provided in the header above. The ASSISTANT must refer to events using their exact dates (e.g. "On 5 September 2025...") rather than vague terms like "recently" or "last week".
 - USER asks progressively deeper questions (causes, implications, stakeholders, comparisons).
 - ASSISTANT gives accurate, well-explained answers from the article.
 - Output ONLY valid JSON — no markdown, no preamble, no extra text.
