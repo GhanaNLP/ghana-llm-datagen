@@ -13,13 +13,7 @@ We're generating a high-quality Ghanaian conversational AI dataset from news art
 git clone https://github.com/YOUR_USERNAME/ghana-llm-datagen.git
 cd ghana-llm-datagen
 ```
-
-### 2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Run with your code
+### 2. Run the code to generate LLM data
 ```bash
 python run.py --code YOUR_VOLUNTEER_CODE
 ```
