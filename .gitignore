@@ -9,6 +9,7 @@ batches/
 
 # Results (submitted via issues)
 results/
+data_cache/
 
 # Python
 __pycache__/

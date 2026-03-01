@@ -47,7 +47,7 @@ import openai
 
 # ── Config — owner updates these before pushing ───────────────────────────────
 
-GITHUB_REPO        = "YOUR_USERNAME/ghana-llm-datagen"
+GITHUB_REPO        = "GhanaNLP/ghana-llm-datagen"
 RELEASE_TAG        = "v1.0-data"
 NEWS_FILENAME      = "news_data.csv"
 RESEARCH_FILENAME  = "research_data.csv"
@@ -59,6 +59,7 @@ NVIDIA_MODEL      = "meta/llama-3.1-70b-instruct"
 RETRY_DELAY       = 8
 MAX_CONTENT_CHARS = 3500
 PAGES_PER_CHUNK   = 2
+ULTRACHAT_CSV     = "ultrachat_sample.csv"  # style reference — lives in the repo
 
 
 # ── Decode volunteer code ─────────────────────────────────────────────────────
@@ -194,13 +195,51 @@ def build_research_chunks(df, row_start: int) -> list:
     return chunks
 
 
+
+# ── UltraChat style samples ───────────────────────────────────────────────────
+
+def load_ultrachat_samples() -> list:
+    csv_path = Path(__file__).parent / ULTRACHAT_CSV
+    if not csv_path.exists():
+        sys.exit(f"❌  {ULTRACHAT_CSV} not found. It should be in the same folder as run.py.")
+    import ast as _ast
+    df = pd.read_csv(csv_path)
+    if "data" not in df.columns:
+        sys.exit(f"❌  {ULTRACHAT_CSV} must have a 'data' column. Found: {list(df.columns)}")
+    samples = []
+    for raw in df["data"].dropna():
+        try:
+            turns = _ast.literal_eval(raw) if isinstance(raw, str) else raw
+        except Exception:
+            continue
+        if not isinstance(turns, list) or len(turns) < 2:
+            continue
+        roles = ["user", "assistant"]
+        msgs  = [{"role": roles[i % 2], "content": str(turns[i])} for i in range(len(turns))]
+        samples.append(msgs)
+    print(f"📚  Loaded {len(samples)} UltraChat style samples.")
+    return samples
+
+
+def format_ultrachat_example(msgs: list) -> str:
+    lines = []
+    for m in msgs[:6]:
+        role    = m.get("role", "user").capitalize() if isinstance(m, dict) else "User"
+        content = (m.get("content", "") if isinstance(m, dict) else str(m))[:300]
+        lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-def news_prompt(chunk: dict) -> str:
+def news_prompt(chunk: dict, example: str) -> str:
     return f"""You are a dataset creator. Generate a high-quality multi-turn conversation in the style of UltraChat, based strictly on this Ghanaian news article.
 
 ## News Article
 {chunk['combined_text']}
+
+## Example UltraChat-style Conversation (style reference only — do NOT copy its content):
+{example}
 
 ## Instructions:
 - Generate a realistic multi-turn conversation between a curious USER and a knowledgeable ASSISTANT.
@@ -224,11 +263,14 @@ Required format:
 }}"""
 
 
-def research_prompt(chunk: dict) -> str:
+def research_prompt(chunk: dict, example: str) -> str:
     return f"""You are a dataset creator. Generate a high-quality multi-turn educational conversation in the style of UltraChat, grounded in this excerpt from a Ghanaian research article.
 
 ## Research Excerpt:
 {chunk['content']}
+
+## Example UltraChat-style Conversation (style reference only — do NOT copy its content):
+{example}
 
 ## Instructions:
 - Generate a realistic multi-turn conversation between a curious USER and a knowledgeable ASSISTANT.
@@ -298,7 +340,7 @@ def load_completed(path: Path) -> set:
 # ── Run one data type ─────────────────────────────────────────────────────────
 
 def run_type(data_type: str, row_start: int, row_end: int,
-             client, output_path: Path):
+             client, output_path: Path, ultrachat_samples: list):
 
     print(f"\n{'─'*55}")
     print(f"  Starting {data_type.upper()}  (rows {row_start:,} – {row_end:,})")
@@ -320,11 +362,12 @@ def run_type(data_type: str, row_start: int, row_end: int,
         return 0, 0
 
     with open(output_path, "a", encoding="utf-8") as out_f:
-        for chunk in tqdm(pending, desc=data_type.upper()):
+        for chunk_idx, chunk in enumerate(tqdm(pending, desc=data_type.upper())):
             label = chunk.get("title", chunk.get("filename", ""))[:65]
             tqdm.write(f"\n  → {label}")
 
-            prompt     = news_prompt(chunk) if data_type == "news" else research_prompt(chunk)
+            example    = format_ultrachat_example(ultrachat_samples[chunk_idx % len(ultrachat_samples)])
+            prompt     = news_prompt(chunk, example) if data_type == "news" else research_prompt(chunk, example)
             raw_output = call_api(client, prompt)
 
             if raw_output is None:
@@ -382,14 +425,15 @@ def main():
 ╚══════════════════════════════════════════════════════╝
 """)
 
-    client = make_client(info["api_key"])
+    client           = make_client(info["api_key"])
+    ultrachat_samples = load_ultrachat_samples()
 
     # ── Run news, then research ────────────────────────────────────────────
     news_out  = output_path.parent / f"{news_label}.jsonl"
     res_out   = output_path.parent / f"{res_label}.jsonl"
 
-    run_type("news",     info["news_start"], info["news_end"], client, news_out)
-    run_type("research", info["res_start"],  info["res_end"],  client, res_out)
+    run_type("news",     info["news_start"], info["news_end"], client, news_out, ultrachat_samples)
+    run_type("research", info["res_start"],  info["res_end"],  client, res_out,  ultrachat_samples)
 
     # ── Final summary ──────────────────────────────────────────────────────
     total, good = 0, 0
