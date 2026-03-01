@@ -69,23 +69,6 @@ None. All computation happens on NVIDIA's API servers. You just need a normal la
 
 ---
 
-## 📁 Repo Structure
-
-```
-ghana-llm-datagen/
-├── run.py                     ← Volunteers run this
-├── requirements.txt
-├── scripts/
-│   ├── admin_setup.py         ← Owner: generate volunteer codes
-│   ├── split_csv.py           ← Owner: split large CSVs into batches
-│   └── merge_results.py       ← Owner: merge all submitted results
-└── .github/
-    └── ISSUE_TEMPLATE/
-        └── result_submission.md
-```
-
----
-
 ## 🙏 Contributing
 
 All volunteers will be credited in the final dataset release. Thank you for helping build AI resources for Ghana! 🇬🇭
