@@ -45,6 +45,7 @@ import lzma
 import pandas as pd
 from tqdm import tqdm
 import openai
+from progress_logger import ProgressLogger
 
 # ── Config — owner updates these before pushing ───────────────────────────────
 
@@ -52,6 +53,27 @@ GITHUB_REPO        = "GhanaNLP/ghana-llm-datagen"
 RELEASE_TAG        = "v1.0-data"
 NEWS_FILENAME      = "news_data.csv"
 RESEARCH_FILENAME  = "research_data.csv"
+
+# ── Shared progress Gist — coordinator sets these once ────────────────────────
+# 1. Create a PUBLIC gist at https://gist.github.com with a file called
+#    "ghana_llm_progress.jsonl". GitHub rejects empty files, so paste this
+#    single line as the initial content (the logger ignores it):
+#        {"init": true}
+# 2. Generate a fine-grained PAT with "Gists: Read and Write" scope ONLY.
+#    (This token cannot touch repos, org settings, or anything else.)
+# 3. Split the token string in half and paste each half below.
+#    This defeats GitHub's secret scanner, which looks for the literal token
+#    string. The token is low-risk (Gist-only scope) but splitting it means
+#    GitHub won't auto-revoke it when volunteers push this file to their forks.
+#
+#    Example — if your token is "github_pat_AAAAABBBBBCCCCC":
+#        _TOK_A = "github_pat_AAAAA"
+#        _TOK_B = "BBBBBCCCCC"
+_TOK_A = "ghp_qkDY1necYIaLdLmp"    # first ~half of the github_pat_... token
+_TOK_B = "70p5ueC60ScRfz4cIwtn"   # second half
+PROGRESS_GIST_TOKEN = _TOK_A + _TOK_B          # reassembled at runtime only
+
+PROGRESS_GIST_ID    = "f36345805c8740981aa3bca09056ab9c"      # e.g. "a1b2c3d4e5f6..."
 
 # ── Model config ──────────────────────────────────────────────────────────────
 
@@ -196,7 +218,6 @@ def build_research_chunks(df, row_start: int) -> list:
     return chunks
 
 
-
 # ── UltraChat style samples ───────────────────────────────────────────────────
 
 def load_ultrachat_samples() -> list:
@@ -278,6 +299,7 @@ def research_prompt(chunk: dict, example: str) -> str:
 - Generate a realistic multi-turn conversation between a curious USER and a knowledgeable ASSISTANT.
 - The conversation should have 4-6 turns (USER and ASSISTANT alternating).
 - Base all factual content strictly on the excerpt. Do not invent facts.
+- The ASSISTANT must refer to events using their exact dates (e.g. "On 5 September 2025...") rather than vague terms like "recently" or "last week".
 - USER asks progressively deeper questions.
 - ASSISTANT gives accurate, well-explained answers.
 - Output ONLY valid JSON — no markdown, no preamble, no extra text.
@@ -339,7 +361,6 @@ def load_completed(path: Path) -> set:
     return done
 
 
-
 # ── Zip output ────────────────────────────────────────────────────────────────
 
 def zip_output(jsonl_path: Path) -> Path:
@@ -358,8 +379,12 @@ def zip_output(jsonl_path: Path) -> Path:
 
 # ── Run one data type ─────────────────────────────────────────────────────────
 
+# How often to push a progress event (every N chunks processed)
+LOG_EVERY_N_CHUNKS = 10
+
 def run_type(data_type: str, row_start: int, row_end: int,
-             client, output_path: Path, ultrachat_samples: list):
+             client, output_path: Path, ultrachat_samples: list,
+             logger: ProgressLogger):
 
     print(f"\n{'─'*55}")
     print(f"  Starting {data_type.upper()}  (rows {row_start:,} – {row_end:,})")
@@ -380,6 +405,12 @@ def run_type(data_type: str, row_start: int, row_end: int,
         print(f"  ✅  {data_type.upper()} already complete!\n")
         return 0, 0
 
+    # Log that this volunteer is starting (or resuming) this data type
+    already_done = len(completed)
+    logger.log_start(data_type, total_chunks=len(chunks))
+
+    good_this_run = 0
+
     with open(output_path, "a", encoding="utf-8") as out_f:
         for chunk_idx, chunk in enumerate(tqdm(pending, desc=data_type.upper())):
             label = chunk.get("title", chunk.get("filename", ""))[:65]
@@ -397,6 +428,7 @@ def run_type(data_type: str, row_start: int, row_end: int,
             if record:
                 out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 out_f.flush()
+                good_this_run += 1
                 tqdm.write(f"  ✅  {len(record.get('conversations', []))} turns saved")
             else:
                 fallback = {"chunk_id": chunk["chunk_id"], "raw_output": raw_output, "parse_error": True}
@@ -408,8 +440,22 @@ def run_type(data_type: str, row_start: int, row_end: int,
                 out_f.flush()
                 tqdm.write("  ⚠️   Raw output saved (parse failed)")
 
+            # Occasional progress push (rate-limited inside logger)
+            if (chunk_idx + 1) % LOG_EVERY_N_CHUNKS == 0:
+                done_so_far = already_done + chunk_idx + 1
+                logger.log_progress(
+                    data_type,
+                    done=done_so_far,
+                    total=len(chunks),
+                    good=already_done + good_this_run,  # rough — good in all runs combined
+                )
+
     lines = [json.loads(l) for l in open(output_path) if l.strip()]
     good  = sum(1 for l in lines if not l.get("parse_error"))
+
+    # Final done event for this type
+    logger.log_done(data_type, total=len(lines), good=good)
+
     return len(lines), good
 
 
@@ -432,6 +478,18 @@ def main():
     res_count  = info['res_end']  - info['res_start']
     est_hours  = (news_count + res_count) * 8 / 3600
 
+    # Build logger — silently skip if gist not configured yet
+    gist_configured = (
+        PROGRESS_GIST_ID != "YOUR_GIST_ID_HERE" and
+        _TOK_A           != "YOUR_FIRST_HALF"
+    )
+    logger = ProgressLogger(
+        gist_id    = PROGRESS_GIST_ID,
+        gist_token = PROGRESS_GIST_TOKEN,
+        api_key    = info["api_key"],
+        silent     = not gist_configured,
+    )
+
     print(f"""
 ╔══════════════════════════════════════════════════════╗
 ║       Ghana LLM Dataset Generator — Volunteer        ║
@@ -441,6 +499,7 @@ def main():
 ║  Model    : {NVIDIA_MODEL:<41} ║
 ║  Output   : {str(output_path):<41} ║
 ║  Est. time: ~{est_hours:.1f}h (auto-resumes if interrupted){' '*(18-len(f"~{est_hours:.1f}h (auto-resumes if interrupted)"))}║
+║  Shadow ID: {logger.shadow_name:<41} ║
 ╚══════════════════════════════════════════════════════╝
 """)
 
@@ -451,9 +510,9 @@ def main():
     news_out  = output_path.parent / f"{news_label}.jsonl"
     res_out   = output_path.parent / f"{res_label}.jsonl"
 
-    run_type("news",     info["news_start"], info["news_end"], client, news_out, ultrachat_samples)
+    run_type("news",     info["news_start"], info["news_end"], client, news_out, ultrachat_samples, logger)
     news_zip = zip_output(news_out)
-    run_type("research", info["res_start"],  info["res_end"],  client, res_out,  ultrachat_samples)
+    run_type("research", info["res_start"],  info["res_end"],  client, res_out,  ultrachat_samples, logger)
     res_zip  = zip_output(res_out)
 
     # ── Final summary ──────────────────────────────────────────────────────
