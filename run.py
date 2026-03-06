@@ -350,7 +350,7 @@ def load_completed(path: Path) -> set:
     done = set()
     if not path.exists():
         return done
-    with open(path) as f:
+    with open(path,encoding="utf-8") as f:
         for line in f:
             try:
                 cid = json.loads(line.strip()).get("chunk_id")
