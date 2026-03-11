@@ -7,15 +7,13 @@ labels: results
 
 ## ⚠️ Important: Do Not Create an Issue
 
-We no longer accept result submissions via GitHub Issues. Instead, please follow these steps:
+We no longer accept result submissions via GitHub Issues. Instead:
 
-1. **Place your output files** in the `results/` folder of the repository
-2. **Create a Pull Request** with your changes
-3. **Ensure your PR includes:**
-   - The two `.jsonl` output files (compressed as `.zip` is optional)
-   - Any relevant batch information in the PR description
+1. **Ensure your output files** (the 2 `.xz` files from your run) are in the `results/` folder
+2. **Create a Pull Request** with the updated `results/` folder
+3. **Submit the PR** to be merged with the main branch
 
-This allows us to review and merge your results directly into the main branch.
+That's it! No need to compress or attach anything—just commit the `.xz` files in `results/` and open a PR.
 
 ---
 
