@@ -5,7 +5,7 @@ title: "Results"
 labels: results
 ---
 
-Attach your two `.xz` files from your `results/` folder using the paperclip icon below or by dragging them into this text area.
+Please compress the two output `.jsonl` output files as `.zip` and attach them to this issue request.
 
 ---
 _Thank you for contributing to the Ghana LLM project! 🇬🇭_
