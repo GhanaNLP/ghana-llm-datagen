@@ -17,7 +17,10 @@ cd ghana-llm-datagen
 ```bash
 python run.py --code YOUR_VOLUNTEER_CODE
 ```
-
+Or for faster processing, run the async version
+```bash
+python run_async.py --code YOUR_VOLUNTEER_CODE
+```
 > Your volunteer code is sent to you by the project owner.
 
 **That's it.** The script will:
@@ -33,6 +36,10 @@ python run.py --code YOUR_VOLUNTEER_CODE
 Just re-run the same command:
 ```bash
 python run.py --code YOUR_VOLUNTEER_CODE
+```
+Using async version
+```bash
+python run_async.py --code YOUR_VOLUNTEER_CODE
 ```
 It resumes exactly where it left off. Nothing is lost.
 
@@ -50,6 +57,9 @@ We have a dahsboard to track progress [here](https://huggingface.co/spaces/ghana
 
 **Q: How long will it take?**  
 Typically 80–100 hours depending on the api server speed. You can stop and resume the run with progress preserved.
+
+**Q: How long will it take for Async version?**  
+Typically 48–72 hours depending on the api server speed. You can stop and resume the run with progress preserved.
 
 **Q: Is the code safe? Is it an API key?**  
 Your code is a volunteer-specific token that encodes your batch assignment and a temporary API key.
