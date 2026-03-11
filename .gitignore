@@ -7,8 +7,10 @@ volunteer_codes.json
 batch_files/
 batches/
 
-# Results (submitted via issues)
-results/
+# Results (submitted via issues) — only allow .xz files
+results/*
+!results/
+!results/*.xz
 data_cache/
 
 # Python
