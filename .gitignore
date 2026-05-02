@@ -23,3 +23,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+.python-version
+pyproject.toml
+.idea
+uv.lock
+
